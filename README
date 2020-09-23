@@ -1,0 +1,15 @@
+redo: Rebuilding target files when source files have changed
+
+redo is a build tool described but not shared by Daniel J. Bernstein
+<http://cr.yp.to/redo.html>.
+
+Build:
+
+	go build
+
+Install:
+
+	ln -s `pwd`/redo ~/bin/redo
+	ln -s `pwd`/redo ~/bin/redo-ifchange
+	ln -s `pwd`/redo ~/bin/redo-ifcreate
+	ln -s `pwd`/redo.1 ~/man/man1/

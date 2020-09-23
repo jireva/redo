@@ -1,0 +1,59 @@
+.TH REDO 1 
+.SH NAME
+redo, redo-ifchange, redo-ifcreate \- rebuild target files when source files have changed.
+.SH SYNOPSIS
+.B redo
+target.ext ...
+.PP
+.B redo-ifchange
+file ...
+.PP
+.B redo-ifcreate
+file ...
+.PP
+.SH DESCRIPTION
+
+.I redo
+runs an executable named
+.I target.ext.do
+or
+.IR default.ext.do ,
+to rebuild
+.IR target.ext ,
+atomically, like:
+.EX
+	set -e
+	target.ext.do target.ext ext target.ext---alt-redoing > target.ext---redoing
+	fsync target.ext---redoing
+	mv target.ext---redoing target.ext
+.EE
+(If your
+.I .do
+executable outputs a directory, you can use the temporary path passed as argument
+.BR $3 .
+It's an error to write to both
+.B $3
+and stdout.)
+After executing it, redo automatically records the
+.I .do
+executable as a dependency of
+.I target.ext
+in
+.IR target.ext.prereqs .
+.PP
+
+.I redo-ifchanage
+can be called from within a
+.I .do
+executable to record and rebuild additional dependencies.
+If an argument to redo-ifchange is a target that can be rebuilt by redo,
+redo-ifchange will rebuild it if its dependencies have changed since the last run.
+If an argument to redo-ifchange is a source file,
+redo-ifchange simply records that the file is a dependency of the target build by the
+.I .do
+executable it is called from.
+
+.I redo-ifcreate
+can be called from within
+.I .do
+executables to record that the build depends on the non-existence of arbitrary files.
