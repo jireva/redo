@@ -10,6 +10,8 @@ file ...
 .PP
 .B redo-ifcreate
 file ...
+.B redo-unless-change
+file ...
 .PP
 .SH DESCRIPTION
 
@@ -23,7 +25,7 @@ to rebuild
 atomically, like:
 .EX
 	set -e
-	target.ext.do target.ext ext target.ext---alt-redoing > target.ext---redoing
+	./target.ext.do target.ext ext target.ext---alt-redoing > target.ext---redoing
 	fsync target.ext---redoing
 	mv target.ext---redoing target.ext
 .EE
@@ -56,4 +58,9 @@ executable it is called from.
 .I redo-ifcreate
 can be called from within
 .I .do
-executables to record that the build depends on the non-existence of arbitrary files.
+executables to record that the build depends on the non-existence of the declared files.
+
+.I redo-unless-change
+can be called from within
+.I .do
+executables to record that the build should be aborted if the declared files have been changed since the last build.

@@ -34,7 +34,7 @@ func main() {
 		RedoTreeTime = time.Unix(t, 0)
 	}
 
-	if progName != "redo-ifchange" && progName != "redo" && progName != "redo-ifcreate" {
+	if progName != "redo-ifchange" && progName != "redo" && progName != "redo-ifcreate" && progName != "redo-unless-change" {
 		log.Fatalln("Unrecognized executable name:", progName)
 	}
 
@@ -115,6 +115,31 @@ func main() {
 		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
 			_, err = fmt.Fprintf(prereqsFile, "%s	ifcreate\n", arg)
+			if err != nil {
+				log.Fatalln(fmt.Errorf("unable to add ifcreate dep: %v", err))
+			}
+		}
+	}
+	if progName == "redo-unless-change" {
+		parent := os.Getenv(RedoParentEnv)
+		if parent == "" {
+			log.Fatalln(fmt.Errorf("redo-unless-change should be called from a do script"))
+		}
+		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
+		}
+		defer prereqsFile.Close()
+		for _, arg := range os.Args[1:] {
+			n, err = NewNode(arg)
+			if err != nil {
+				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+			}
+			h, err := n.Hash()
+			if err != nil {
+				log.Fatalln(fmt.Errorf("unable to hash: %v", err))
+			}
+			_, err = fmt.Fprintf(prereqsFile, "%s	unless-change	%s\n", arg, h)
 			if err != nil {
 				log.Fatalln(fmt.Errorf("unable to add ifcreate dep: %v", err))
 			}

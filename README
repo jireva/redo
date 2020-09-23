@@ -12,4 +12,5 @@ Install:
 	ln -s `pwd`/redo ~/bin/redo
 	ln -s `pwd`/redo ~/bin/redo-ifchange
 	ln -s `pwd`/redo ~/bin/redo-ifcreate
+	ln -s `pwd`/redo ~/bin/redo-unless-change
 	ln -s `pwd`/redo.1 ~/man/man1/

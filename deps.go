@@ -98,6 +98,18 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 				return
 			}
 		}
+		if line[1] == "unless-change" {
+			o, err = NewNode(n.Dir + line[0])
+			h, err := o.Hash()
+			if err != nil {
+				return false, err
+			}
+			if h == line[2] {
+				continue
+			} else {
+				return true, fmt.Errorf("Hash changed since last build: %s", line[0])
+			}
+		}
 		o, err = NewNode(n.Dir + line[0])
 		if err != nil {
 			return
