@@ -245,7 +245,11 @@ func (n *Node) Build() (err error) {
 	defer tmpStdoutFile.Close()
 	defer os.Remove(tmpStdout)
 
-	c := exec.Command("./"+n.DoScript, n.File, "", redoArg3)
+	c := exec.Command(
+		"./"+n.DoScript,
+		n.File,
+		n.File[:len(n.File)-len(filepath.Ext(n.File))],
+		redoArg3)
 	c.Dir = n.Dir
 	c.Stdout = tmpStdoutFile
 	c.Stderr = os.Stderr
