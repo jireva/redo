@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +17,6 @@ type Node struct {
 	// Filesystem attributes of the node
 	Dir, File, DoScript                    string
 	IsTarget, Exists, IsDir, UsesDefaultDo bool
-	ModTime                                time.Time
 
 	// internal state
 	lockFile *os.File
@@ -32,7 +30,6 @@ func NewNode(path string) (n *Node, err error) {
 	if s, err = os.Stat(path); err == nil {
 		n.Exists = true
 		n.IsDir = s.IsDir()
-		n.ModTime = s.ModTime()
 		if s, err = os.Stat(path + ".prereqs"); err == nil {
 			n.IsTarget = true
 		} else if os.IsNotExist(err) {
@@ -83,7 +80,6 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 	scanner := bufio.NewScanner(f)
 	var line []string
 	var o *Node
-	var t int64
 	var hashChanged bool
 	var wg sync.WaitGroup
 	for scanner.Scan() {
@@ -107,19 +103,18 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 			if h == line[2] {
 				continue
 			} else {
-				return true, fmt.Errorf("Hash changed since last build: %s", line[0])
+				return false, fmt.Errorf("Hash changed since last build: %s", line[0])
 			}
+		}
+		if line[1] != "ifchange" {
+			return false, fmt.Errorf("Unknown dependency type: %s", line[1])
 		}
 		o, err = NewNode(n.Dir + line[0])
 		if err != nil {
 			return
 		}
 		if !o.IsTarget {
-			t, err = strconv.ParseInt(line[1], 10, 64)
-			if err != nil {
-				return
-			}
-			hashChanged, err = o.HashChanged(time.Unix(t, 0), line[2])
+			hashChanged, err = o.HashChanged(line[2])
 			if err != nil {
 				return
 			}
@@ -131,11 +126,7 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 			o.Build()
 			continue
 		}
-		t, err = strconv.ParseInt(line[1], 10, 64)
-		if err != nil {
-			return
-		}
-		hashChanged, err = o.HashChanged(time.Unix(t, 0), line[2])
+		hashChanged, err = o.HashChanged(line[2])
 		if err != nil {
 			return
 		}
@@ -163,10 +154,7 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 }
 
 // Check if hash has changed since last build
-func (n *Node) HashChanged(lastModTime time.Time, lastHash string) (bool, error) {
-	if n.ModTime.Equal(lastModTime) {
-		return true, nil
-	}
+func (n *Node) HashChanged(lastHash string) (bool, error) {
 	h, err := n.Hash()
 	if err != nil {
 		return false, err
@@ -205,9 +193,8 @@ func (n *Node) Build() (err error) {
 	if err != nil {
 		return fmt.Errorf("unable to hash do exec: %v", err)
 	}
-	_, err = fmt.Fprintf(prereqsFile, "%s	%d	%s\n",
+	_, err = fmt.Fprintf(prereqsFile, "%s	ifchange	%s\n",
 		do.File,
-		do.ModTime.Unix(),
 		h)
 	if err != nil {
 		return
@@ -354,9 +341,8 @@ func (n *Node) AddDep(prereqsFile *os.File) (err error) {
 	if err != nil {
 		return fmt.Errorf("unable to hash: %v", err)
 	}
-	_, err = fmt.Fprintf(prereqsFile, "%s	%d	%s\n",
+	_, err = fmt.Fprintf(prereqsFile, "%s	ifchange	%s\n",
 		n.Dir+n.File,
-		n.ModTime.Unix(),
 		h)
 	return
 }
