@@ -20,7 +20,7 @@ var (
 func main() {
 	log.SetFlags(0)
 	progName := filepath.Base(os.Args[0])
-	log.SetPrefix(progName + ": ")
+	log.SetPrefix("While " + progName + "ing ")
 
 	t := os.Getenv(RedoTreeTimeEnv)
 	if t == "" {
@@ -108,6 +108,16 @@ func main() {
 		if parent == "" {
 			log.Fatalln(fmt.Errorf("redo-ifcreate should be called from a do script"))
 		}
+		for _, arg := range os.Args[1:] {
+			n, err = NewNode(arg)
+			if err != nil {
+				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+			}
+			_, err = n.RedoIfCreate()
+			if err != nil {
+				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+			}
+		}
 		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
@@ -125,6 +135,16 @@ func main() {
 		if parent == "" {
 			log.Fatalln(fmt.Errorf("redo-unless-change should be called from a do script"))
 		}
+		for _, arg := range os.Args[1:] {
+			n, err = NewNode(arg)
+			if err != nil {
+				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+			}
+			err = n.RedoUnlessChange()
+			if err != nil {
+				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+			}
+		}
 		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
@@ -135,13 +155,9 @@ func main() {
 			if err != nil {
 				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
 			}
-			h, err := n.Hash()
+			_, err = fmt.Fprintf(prereqsFile, "%s	unless-change\n", arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("unable to hash: %v", err))
-			}
-			_, err = fmt.Fprintf(prereqsFile, "%s	unless-change	%s\n", arg, h)
-			if err != nil {
-				log.Fatalln(fmt.Errorf("unable to add ifcreate dep: %v", err))
+				log.Fatalln(fmt.Errorf("unable to add unless-change dep: %v", err))
 			}
 		}
 	}

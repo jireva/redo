@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -27,37 +28,44 @@ func NewNode(path string) (n *Node, err error) {
 	n = new(Node)
 	n.Dir, n.File = filepath.Split(path)
 	var s os.FileInfo
-	if s, err = os.Stat(path); err == nil {
-		n.Exists = true
-		n.IsDir = s.IsDir()
-		if s, err = os.Stat(path + ".prereqs"); err == nil {
-			n.IsTarget = true
-		} else if os.IsNotExist(err) {
-			err = nil
-			return
-		} else {
-			return
-		}
-	} else if os.IsNotExist(err) {
+
+	if s, err = os.Stat(path + ".prereqs"); err == nil {
 		n.IsTarget = true
+	} else if os.IsNotExist(err) {
 		err = nil
 	} else {
 		return
 	}
+
+	if s, err = os.Stat(path); err == nil {
+		n.Exists = true
+		n.IsDir = s.IsDir()
+	} else if os.IsNotExist(err) {
+		err = nil
+	} else {
+		return
+	}
+
 	if s, err = os.Stat(path + ".do"); err == nil {
+		n.IsTarget = true
 		n.DoScript = n.File + ".do"
 	} else if os.IsNotExist(err) {
 		ext := filepath.Ext(n.File)
 		if s, err = os.Stat(n.Dir + "default" + ext + ".do"); err == nil {
 			n.UsesDefaultDo = true
 			n.DoScript = "default" + ext + ".do"
+			n.IsTarget = true
 		} else if os.IsNotExist(err) {
-			err = fmt.Errorf("do script is missing but prereqs exists: %s", path)
-			return
+			err = nil
 		} else {
 			return
 		}
 	} else {
+		return
+	}
+
+	if n.IsTarget && n.DoScript == "" {
+		err = fmt.Errorf("file %s has .prereqs but no do exec", path)
 		return
 	}
 	return
@@ -85,26 +93,28 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 	for scanner.Scan() {
 		line = strings.Split(scanner.Text(), "	")
 		if line[1] == "ifcreate" {
-			if _, err = os.Stat(n.Dir + line[0]); err == nil {
-				changed = true
-				continue
-			} else if os.IsNotExist(err) {
-				continue
-			} else {
+			o, err = NewNode(n.Dir + line[0])
+			if err != nil {
 				return
 			}
-		}
-		if line[1] == "unless-change" {
-			o, err = NewNode(n.Dir + line[0])
-			h, err := o.Hash()
+			created, err := o.RedoIfCreate()
 			if err != nil {
 				return false, err
 			}
-			if h == line[2] {
-				continue
-			} else {
-				return false, fmt.Errorf("Hash changed since last build: %s", line[0])
+			if created {
+				changed = true
 			}
+			continue
+		} else if line[1] == "unless-change" {
+			o, err = NewNode(n.Dir + line[0])
+			if err != nil {
+				return false, err
+			}
+			err = o.RedoUnlessChange()
+			if err != nil {
+				return false, err
+			}
+			continue
 		}
 		if line[1] != "ifchange" {
 			return false, fmt.Errorf("Unknown dependency type: %s", line[1])
@@ -151,6 +161,53 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 		n.Build()
 	}
 	return
+}
+
+// Checks if file has been created
+// Returns true if it has been created
+func (n *Node) RedoIfCreate() (bool, error) {
+	if _, err := os.Stat(n.Dir + n.File); err == nil {
+		log.Printf("%s created since last run\n", n.Dir+n.File)
+		return true, nil
+	} else if os.IsNotExist(err) {
+		return false, nil
+	} else {
+		return false, err
+	}
+}
+
+func (n *Node) RedoUnlessChange() (err error) {
+	if !n.Exists {
+		err = fmt.Errorf("unless-change dependencies must exist")
+		return
+	}
+	new_hash, err := n.Hash()
+	if _, err = os.Stat(n.Dir + n.File + ".md5"); err == nil {
+		old_hash, err := ioutil.ReadFile(n.Dir + n.File + ".md5")
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(string(old_hash), new_hash) {
+			return nil
+		} else {
+			err = fmt.Errorf("Hash changed since last build: %s", n.Dir+n.File)
+			return err
+		}
+	} else if os.IsNotExist(err) {
+		log.Printf("hashing \"%s\" for the first time, integrity will be preserved hereafter.\n", n.Dir+n.File)
+		md5File, err := os.Create(n.Dir + n.File + ".md5")
+		if err != nil {
+			return fmt.Errorf("unable to write sum for unless-change dependency %s:", n.Dir+n.File, err)
+		}
+		defer md5File.Close()
+		_, err = fmt.Fprintf(md5File, "%s	%s\n", new_hash, n.File)
+		if err != nil {
+			return fmt.Errorf("unable to write sum for unless-change dependency %s:", n.Dir+n.File, err)
+		}
+		return nil
+	} else {
+		return err
+	}
 }
 
 // Check if hash has changed since last build
@@ -202,7 +259,8 @@ func (n *Node) Build() (err error) {
 	if n.UsesDefaultDo {
 		_, err = fmt.Fprintf(prereqsFile, "%s	ifcreate\n", n.File+".do")
 		if err != nil {
-			log.Fatalln(fmt.Errorf("unable to add ifcreate dep for non-default do: %v", err))
+			err = fmt.Errorf("unable to add ifcreate dep for non-default do: %v", err)
+			return
 		}
 	}
 
@@ -280,10 +338,10 @@ func (n *Node) Build() (err error) {
 				return err
 			}
 			file, err := os.Open(path)
-			defer file.Close()
 			if err != nil {
 				return err
 			}
+			defer file.Close()
 			if err = file.Sync(); err != nil {
 				return err
 			}
