@@ -145,21 +145,6 @@ func main() {
 				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
 			}
 		}
-		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
-		if err != nil {
-			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
-		}
-		defer prereqsFile.Close()
-		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
-			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
-			}
-			_, err = fmt.Fprintf(prereqsFile, "%s	unless-change\n", arg)
-			if err != nil {
-				log.Fatalln(fmt.Errorf("unable to add unless-change dep: %v", err))
-			}
-		}
 	}
 	return
 }

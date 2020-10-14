@@ -105,16 +105,6 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 				changed = true
 			}
 			continue
-		} else if line[1] == "unless-change" {
-			o, err = NewNode(n.Dir + line[0])
-			if err != nil {
-				return false, err
-			}
-			err = o.RedoUnlessChange()
-			if err != nil {
-				return false, err
-			}
-			continue
 		}
 		if line[1] != "ifchange" {
 			return false, fmt.Errorf("Unknown dependency type: %s", line[1])
