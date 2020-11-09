@@ -166,9 +166,9 @@ func (n *Node) RedoIfCreate() (bool, error) {
 	}
 }
 
-func (n *Node) RedoUnlessChange() (err error) {
+func (n *Node) StopIfChange() (err error) {
 	if !n.Exists {
-		err = fmt.Errorf("unless-change dependencies must exist")
+		err = fmt.Errorf("file does not exist")
 		return
 	}
 	new_hash, err := n.Hash()
@@ -187,12 +187,12 @@ func (n *Node) RedoUnlessChange() (err error) {
 		log.Printf("hashing \"%s\" for the first time, integrity will be preserved hereafter.\n", n.Dir+n.File)
 		md5File, err := os.Create(n.Dir + n.File + ".md5")
 		if err != nil {
-			return fmt.Errorf("unable to write sum for unless-change dependency %s:", n.Dir+n.File, err)
+			return fmt.Errorf("unable to write hash for %s:", n.Dir+n.File, err)
 		}
 		defer md5File.Close()
 		_, err = fmt.Fprintf(md5File, "%s	%s\n", new_hash, n.File)
 		if err != nil {
-			return fmt.Errorf("unable to write sum for unless-change dependency %s:", n.Dir+n.File, err)
+			return fmt.Errorf("unable to write hash for %s:", n.Dir+n.File, err)
 		}
 		return nil
 	} else {

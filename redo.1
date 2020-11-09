@@ -11,7 +11,7 @@ file ...
 .B redo-ifcreate
 file ...
 .PP
-.B redo-unless-change
+.B stop-ifchange
 file ...
 .PP
 .SH DESCRIPTION
@@ -61,7 +61,7 @@ can be called from within
 .I .do
 executables to record that the build depends on the non-existence of the declared files.
 
-.I redo-unless-change
+.I stop-ifchange
 can be called from within
 .I .do
 executables to record that the build should be aborted if the declared files have been changed since the last build.

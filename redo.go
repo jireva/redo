@@ -34,7 +34,7 @@ func main() {
 		RedoTreeTime = time.Unix(t, 0)
 	}
 
-	if progName != "redo-ifchange" && progName != "redo" && progName != "redo-ifcreate" && progName != "redo-unless-change" {
+	if progName != "redo-ifchange" && progName != "redo" && progName != "redo-ifcreate" && progName != "stop-ifchange" {
 		log.Fatalln("Unrecognized executable name:", progName)
 	}
 
@@ -130,17 +130,13 @@ func main() {
 			}
 		}
 	}
-	if progName == "redo-unless-change" {
-		parent := os.Getenv(RedoParentEnv)
-		if parent == "" {
-			log.Fatalln(fmt.Errorf("redo-unless-change should be called from a do script"))
-		}
+	if progName == "stop-ifchange" {
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
 				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
 			}
-			err = n.RedoUnlessChange()
+			err = n.StopIfChange()
 			if err != nil {
 				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
 			}
