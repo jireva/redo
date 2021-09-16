@@ -24,12 +24,14 @@ or
 to rebuild
 .IR target.ext ,
 atomically, like:
+.PP
 .EX
 	set -e
 	./target.ext.do target.ext ext target.ext---alt-redoing > target.ext---redoing
 	fsync target.ext---redoing
 	mv target.ext---redoing target.ext
 .EE
+.PP
 (If your
 .I .do
 executable outputs a directory, you can use the temporary path passed as argument
