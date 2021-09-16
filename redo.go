@@ -136,11 +136,16 @@ func main() {
 			if err != nil {
 				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
 			}
-			err = n.StopIfChange()
-			if err != nil {
-				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
-			}
+			wg.Add(1)
+			go func(n *Node) {
+				defer wg.Done()
+				err = n.StopIfChange()
+				if err != nil {
+					log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+				}
+			}(n)
 		}
+		wg.Wait()
 	}
 	return
 }
