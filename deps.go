@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -76,9 +75,9 @@ func NewNode(path string) (n *Node, err error) {
 // Returns true if changed
 func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCauseFunc) (changed bool, err error) {
 	select {
-		case <- ctx.Done():
-			return false, context.Cause(ctx)
-		default:
+	case <-ctx.Done():
+		return false, context.Cause(ctx)
+	default:
 	}
 
 	if !n.IsTarget {
@@ -149,6 +148,7 @@ func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCause
 			defer wg.Done()
 			_, err = n.RedoIfChange(ctx, cancelCause)
 			if err != nil {
+				cancelCause(err)
 				return
 			}
 		}(o)
@@ -183,7 +183,7 @@ func (n *Node) StopIfChange() (err error) {
 	}
 	new_hash, err := n.Hash()
 	if _, err = os.Stat(n.Dir + n.File + ".md5"); err == nil {
-		old_hash, err := ioutil.ReadFile(n.Dir + n.File + ".md5")
+		old_hash, err := os.ReadFile(n.Dir + n.File + ".md5")
 		if err != nil {
 			return err
 		}
@@ -354,11 +354,6 @@ func (n *Node) build() (err error) {
 	}
 	return
 }
-
-const (
-	stateDeps     = "deps"
-	stateBuilding = "building"
-)
 
 func (n *Node) Lock() (done bool, err error) {
 	if _, err = os.Stat(n.Dir + n.File + ".lock"); err == nil {

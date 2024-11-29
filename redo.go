@@ -41,7 +41,7 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	go func() {
-		<- sig
+		<-sig
 		cancelCause(errors.New("received signal"))
 	}()
 	var wg sync.WaitGroup
@@ -61,7 +61,7 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := n.RedoIfChange(ctx, cancelCause)
+				_, err = n.RedoIfChange(ctx, cancelCause)
 				if err != nil {
 					cancelCause(err)
 				}
