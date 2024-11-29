@@ -84,7 +84,7 @@ func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCause
 		return
 	}
 	if !n.Exists {
-		return true, n.build()
+		return true, n.build(ctx)
 	}
 	f, err := os.Open(n.Dir + n.File + ".prereqs")
 	if err != nil {
@@ -130,7 +130,7 @@ func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCause
 		}
 		if !o.Exists {
 			changed = true
-			if err = o.build(); err != nil {
+			if err = o.build(ctx); err != nil {
 				return
 			}
 			continue
@@ -158,7 +158,7 @@ func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCause
 		return
 	}
 	if changed {
-		err = n.build()
+		err = n.build(ctx)
 	}
 	return
 }
@@ -228,7 +228,7 @@ func (n *Node) Hash() (string, error) {
 }
 
 // Run n.DoScript to build target
-func (n *Node) build() (err error) {
+func (n *Node) build(ctx context.Context) (err error) {
 	done, err := n.Lock()
 	if done || err != nil {
 		return
@@ -290,7 +290,8 @@ func (n *Node) build() (err error) {
 	defer tmpStdoutFile.Close()
 	defer os.Remove(tmpStdout)
 
-	c := exec.Command(
+	c := exec.CommandContext(
+		ctx,
 		"./"+n.DoScript,
 		n.File,
 		n.File[:len(n.File)-len(filepath.Ext(n.File))],
@@ -299,6 +300,9 @@ func (n *Node) build() (err error) {
 	c.Stdout = tmpStdoutFile
 	c.Stderr = os.Stderr
 	c.Env = env
+	c.Cancel = func() error {
+		return c.Process.Signal(os.Interrupt)
+	}
 	if err = c.Run(); err != nil {
 		return fmt.Errorf("failed while rebuilding: %v", err)
 	}
