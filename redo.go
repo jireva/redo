@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -23,16 +22,15 @@ var RedoTreeTime time.Time
 func main() {
 	log.SetFlags(0)
 	progName := filepath.Base(os.Args[0])
-	log.SetPrefix(progName + ": ")
 
-	t := os.Getenv(RedoTreeTimeEnv)
-	if t == "" {
+	ts := os.Getenv(RedoTreeTimeEnv)
+	if ts == "" {
 		RedoTreeTime = time.Now()
 		os.Setenv(RedoTreeTimeEnv, strconv.FormatInt(RedoTreeTime.Unix(), 10))
 	} else {
-		t, err := strconv.ParseInt(t, 10, 64)
+		t, err := strconv.ParseInt(ts, 10, 64)
 		if err != nil {
-			log.Fatalln("invalid", RedoTreeTimeEnv, t)
+			log.Fatalln("invalid", RedoTreeTimeEnv, ts)
 		}
 		RedoTreeTime = time.Unix(t, 0)
 	}
@@ -42,7 +40,7 @@ func main() {
 	signal.Notify(sig, os.Interrupt)
 	go func() {
 		<-sig
-		cancelCause(errors.New("received signal"))
+		cancelCause(fmt.Errorf("received interrupt signal"))
 	}()
 	var wg sync.WaitGroup
 
@@ -68,6 +66,9 @@ func main() {
 			}()
 		}
 		wg.Wait()
+		if err := context.Cause(ctx); err != nil {
+			log.Fatalln(err)
+		}
 	case "redo-ifchange":
 		parent := os.Getenv(RedoParentEnv)
 		if parent == "" {
