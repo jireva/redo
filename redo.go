@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -34,34 +37,35 @@ func main() {
 		RedoTreeTime = time.Unix(t, 0)
 	}
 
-	var err error
-	var n *Node
+	ctx, cancelCause := context.WithCancelCause(context.Background())
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		<- sig
+		cancelCause(errors.New("received signal"))
+	}()
 	var wg sync.WaitGroup
 
 	switch progName {
 	case "redo":
 		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
+			n, err := NewNode(arg)
 			if err != nil {
-				log.Fatalln("failed to stat", arg, err)
+				cancelCause(fmt.Errorf("failed to stat %s: %v", arg, err))
+				break
 			}
 			if !n.IsTarget {
-				log.Fatalln(arg, "is a source not a target")
+				cancelCause(fmt.Errorf("%s is a source not a target", arg))
+				break
 			}
 			wg.Add(1)
-			go func(n *Node) {
+			go func() {
 				defer wg.Done()
-				changed, err := n.RedoIfChange()
+				_, err := n.RedoIfChange(ctx, cancelCause)
 				if err != nil {
-					log.Fatalln("while building", n.Dir+n.File, err)
+					cancelCause(err)
 				}
-				if !changed {
-					err = n.Build()
-					if err != nil {
-						log.Fatalln("while building", n.Dir+n.File, err)
-					}
-				}
-			}(n)
+			}()
 		}
 		wg.Wait()
 	case "redo-ifchange":
@@ -75,22 +79,26 @@ func main() {
 		}
 		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
+			n, err := NewNode(arg)
 			if err != nil {
-				log.Fatalln("failed to stat", arg, err)
+				cancelCause(fmt.Errorf("failed to stat %s: %v", arg, err))
+				break
 			}
 			wg.Add(1)
-			go func(n *Node) {
+			go func() {
 				defer wg.Done()
-				_, err = n.RedoIfChange()
+				_, err = n.RedoIfChange(ctx, cancelCause)
 				if err != nil {
-					log.Fatalln("while building", n.Dir+n.File, err)
+					cancelCause(err)
 				}
-			}(n)
+			}()
 		}
 		wg.Wait()
+		if err = context.Cause(ctx); err != nil {
+			log.Fatalln(err)
+		}
 		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
+			n, err := NewNode(arg)
 			if err != nil {
 				log.Fatalln("failed to stat", arg, err)
 			}
@@ -105,7 +113,7 @@ func main() {
 			log.Fatalln("redo-ifcreate should be called from a do script")
 		}
 		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
+			n, err := NewNode(arg)
 			if err != nil {
 				log.Fatalln("failed to stat", arg, err)
 			}
@@ -127,22 +135,23 @@ func main() {
 		}
 	case "stop-ifchange":
 		for _, arg := range os.Args[1:] {
-			n, err = NewNode(arg)
+			n, err := NewNode(arg)
 			if err != nil {
 				log.Fatalln("failed to stat", arg, err)
 			}
 			wg.Add(1)
-			go func(n *Node) {
+			go func() {
 				defer wg.Done()
 				err = n.StopIfChange()
 				if err != nil {
 					log.Fatalln("while building", n.Dir+n.File, err)
 				}
-			}(n)
+			}()
 		}
 		wg.Wait()
 	default:
 		log.Fatalln("Unrecognized executable name:", progName)
 	}
+
 	return
 }

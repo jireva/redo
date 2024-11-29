@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -25,7 +26,7 @@ type Node struct {
 
 // Takes a path to a node and returns a *Node
 func NewNode(path string) (n *Node, err error) {
-	n = new(Node)
+	n = &Node{}
 	n.Dir, n.File = filepath.Split(path)
 	var s os.FileInfo
 
@@ -73,12 +74,18 @@ func NewNode(path string) (n *Node, err error) {
 
 // Walk through the dependency tree and update deps as necessary
 // Returns true if changed
-func (n *Node) RedoIfChange() (changed bool, err error) {
+func (n *Node) RedoIfChange(ctx context.Context, cancelCause context.CancelCauseFunc) (changed bool, err error) {
+	select {
+		case <- ctx.Done():
+			return false, context.Cause(ctx)
+		default:
+	}
+
 	if !n.IsTarget {
 		return
 	}
 	if !n.Exists {
-		return true, n.Build()
+		return true, n.build()
 	}
 	f, err := os.Open(n.Dir + n.File + ".prereqs")
 	if err != nil {
@@ -107,7 +114,8 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 			continue
 		}
 		if line[1] != "ifchange" {
-			return false, fmt.Errorf("Unknown dependency type: %s", line[1])
+			err = fmt.Errorf("Unknown dependency type: %s", line[1])
+			return
 		}
 		o, err = NewNode(n.Dir + line[0])
 		if err != nil {
@@ -123,7 +131,9 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 		}
 		if !o.Exists {
 			changed = true
-			o.Build()
+			if err = o.build(); err != nil {
+				return
+			}
 			continue
 		}
 		hashChanged, err = o.HashChanged(line[2])
@@ -137,9 +147,9 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 		wg.Add(1)
 		go func(n *Node) {
 			defer wg.Done()
-			_, err = n.RedoIfChange()
+			_, err = n.RedoIfChange(ctx, cancelCause)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+				return
 			}
 		}(o)
 	}
@@ -148,7 +158,7 @@ func (n *Node) RedoIfChange() (changed bool, err error) {
 		return
 	}
 	if changed {
-		n.Build()
+		err = n.build()
 	}
 	return
 }
@@ -218,7 +228,7 @@ func (n *Node) Hash() (string, error) {
 }
 
 // Run n.DoScript to build target
-func (n *Node) Build() (err error) {
+func (n *Node) build() (err error) {
 	done, err := n.Lock()
 	if done || err != nil {
 		return
