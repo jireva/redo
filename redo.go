@@ -74,11 +74,6 @@ func main() {
 		if parent == "" {
 			log.Fatalln("redo-ifchange should be called from a do script")
 		}
-		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
-		if err != nil {
-			log.Fatalln("unable to append to prereqs file for", RedoParentEnv, err)
-		}
-		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
 			n, err := NewNode(arg)
 			if err != nil {
@@ -95,9 +90,14 @@ func main() {
 			}()
 		}
 		wg.Wait()
-		if err = context.Cause(ctx); err != nil {
+		if err := context.Cause(ctx); err != nil {
 			log.Fatalln(err)
 		}
+		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalln("unable to append to prereqs file for", RedoParentEnv, err)
+		}
+		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
 			n, err := NewNode(arg)
 			if err != nil {
