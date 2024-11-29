@@ -1,4 +1,3 @@
-// redo - build utility
 package main
 
 import (
@@ -11,16 +10,17 @@ import (
 	"time"
 )
 
-var (
+const (
 	RedoParentEnv   = "REDOPARENT"
 	RedoTreeTimeEnv = "REDOTREETIME"
-	RedoTreeTime    time.Time
 )
+
+var RedoTreeTime time.Time
 
 func main() {
 	log.SetFlags(0)
 	progName := filepath.Base(os.Args[0])
-	log.SetPrefix("While " + progName + "ing ")
+	log.SetPrefix(progName + ": ")
 
 	t := os.Getenv(RedoTreeTimeEnv)
 	if t == "" {
@@ -29,65 +29,62 @@ func main() {
 	} else {
 		t, err := strconv.ParseInt(t, 10, 64)
 		if err != nil {
-			log.Fatalln("Unable to parse", RedoTreeTimeEnv, t)
+			log.Fatalln("invalid", RedoTreeTimeEnv, t)
 		}
 		RedoTreeTime = time.Unix(t, 0)
-	}
-
-	if progName != "redo-ifchange" && progName != "redo" && progName != "redo-ifcreate" && progName != "stop-ifchange" {
-		log.Fatalln("Unrecognized executable name:", progName)
 	}
 
 	var err error
 	var n *Node
 	var wg sync.WaitGroup
-	if progName == "redo" {
+
+	switch progName {
+	case "redo":
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+				log.Fatalln("failed to stat", arg, err)
 			}
 			if !n.IsTarget {
-				log.Fatalln(fmt.Errorf("%s is a source not a target", arg))
+				log.Fatalln(arg, "is a source not a target")
 			}
 			wg.Add(1)
 			go func(n *Node) {
 				defer wg.Done()
 				changed, err := n.RedoIfChange()
 				if err != nil {
-					log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+					log.Fatalln("while building", n.Dir+n.File, err)
 				}
 				if !changed {
 					err = n.Build()
 					if err != nil {
-						log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+						log.Fatalln("while building", n.Dir+n.File, err)
 					}
 				}
 			}(n)
 		}
 		wg.Wait()
-	}
-	if progName == "redo-ifchange" {
+	case "redo-ifchange":
 		parent := os.Getenv(RedoParentEnv)
 		if parent == "" {
-			log.Fatalln(fmt.Errorf("redo-ifchange should be called from a do script"))
+			log.Fatalln("redo-ifchange should be called from a do script")
 		}
 		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
+			log.Fatalln("unable to append to prereqs file for", RedoParentEnv, err)
 		}
 		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+				log.Fatalln("failed to stat", arg, err)
 			}
 			wg.Add(1)
 			go func(n *Node) {
 				defer wg.Done()
 				_, err = n.RedoIfChange()
 				if err != nil {
-					log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+					log.Fatalln("while building", n.Dir+n.File, err)
 				}
 			}(n)
 		}
@@ -95,57 +92,57 @@ func main() {
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+				log.Fatalln("failed to stat", arg, err)
 			}
 			err = n.AddDep(prereqsFile)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("unable to add dependency: %v", err))
+				log.Fatalln("unable to add dependency:", err)
 			}
 		}
-	}
-	if progName == "redo-ifcreate" {
+	case "redo-ifcreate":
 		parent := os.Getenv(RedoParentEnv)
 		if parent == "" {
-			log.Fatalln(fmt.Errorf("redo-ifcreate should be called from a do script"))
+			log.Fatalln("redo-ifcreate should be called from a do script")
 		}
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+				log.Fatalln("failed to stat", arg, err)
 			}
 			_, err = n.RedoIfCreate()
 			if err != nil {
-				log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+				log.Fatalln("while building", n.Dir+n.File, err)
 			}
 		}
 		prereqsFile, err := os.OpenFile(parent+".prereqs", os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatalln(fmt.Errorf("unable to append to prereqs file for %s: %v", RedoParentEnv, err))
+			log.Fatalln("unable to append to prereqs file for", RedoParentEnv, err)
 		}
 		defer prereqsFile.Close()
 		for _, arg := range os.Args[1:] {
 			_, err = fmt.Fprintf(prereqsFile, "%s	ifcreate\n", arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("unable to add ifcreate dep: %v", err))
+				log.Fatalln("unable to add ifcreate dep:", err)
 			}
 		}
-	}
-	if progName == "stop-ifchange" {
+	case "stop-ifchange":
 		for _, arg := range os.Args[1:] {
 			n, err = NewNode(arg)
 			if err != nil {
-				log.Fatalln(fmt.Errorf("failed to stat %s: %v", arg, err))
+				log.Fatalln("failed to stat", arg, err)
 			}
 			wg.Add(1)
 			go func(n *Node) {
 				defer wg.Done()
 				err = n.StopIfChange()
 				if err != nil {
-					log.Fatalln(fmt.Errorf("while building %s: %v", n.Dir+n.File, err))
+					log.Fatalln("while building", n.Dir+n.File, err)
 				}
 			}(n)
 		}
 		wg.Wait()
+	default:
+		log.Fatalln("Unrecognized executable name:", progName)
 	}
 	return
 }
